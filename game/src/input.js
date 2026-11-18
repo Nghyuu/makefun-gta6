@@ -1,53 +1,75 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
+// input.js: keyboard and mouse state. Keys are tracked by code (WASD and arrows
+// both drive), the mouse is tracked in world coordinates for aiming, and clicks
+// are queued so the game can consume them once per frame.
 
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
+const Input = {
+  keys: {},
+  pressed: {},
+  mouseX: 0,
+  mouseY: 0,
+  mouseWorldX: 0,
+  mouseWorldY: 0,
+  mouseDown: false,
+  clicked: false,
+  anyKey: false,
+};
 
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
-
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
-
-  window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
+function inputInit(canvas) {
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    Input.keys[e.code] = true;
+    Input.pressed[e.code] = true;
+    Input.anyKey = true;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+    audioInit();
   });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
+  window.addEventListener('keyup', (e) => { Input.keys[e.code] = false; });
+  window.addEventListener('blur', () => { Input.keys = {}; });
+  canvas.addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    Input.mouseX = e.clientX - r.left;
+    Input.mouseY = e.clientY - r.top;
   });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0) { Input.mouseDown = true; Input.clicked = true; }
+    audioInit();
   });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
-  });
+  window.addEventListener('mouseup', (e) => { if (e.button === 0) Input.mouseDown = false; });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+}
 
-  return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
-    },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
-    },
-  };
+function inputEndFrame() {
+  Input.pressed = {};
+  Input.clicked = false;
+  Input.anyKey = false;
+}
+
+function inputDown(code) { return !!Input.keys[code]; }
+function inputPressed(code) { return !!Input.pressed[code]; }
+
+// Scripted input for screenshot staging: when ShotDrive is set, the drive and
+// walk vectors come from it instead of the keys (shots.js sets and clears it).
+let ShotDrive = null;
+
+// The drive vector from keys: x is steering (-1 left, 1 right), y is throttle
+// (1 forward, -1 reverse). On foot the same vector is a walk direction.
+function inputDrive() {
+  if (ShotDrive) return ShotDrive;
+  let x = 0, y = 0;
+  if (inputDown('KeyA') || inputDown('ArrowLeft')) x -= 1;
+  if (inputDown('KeyD') || inputDown('ArrowRight')) x += 1;
+  if (inputDown('KeyW') || inputDown('ArrowUp')) y += 1;
+  if (inputDown('KeyS') || inputDown('ArrowDown')) y -= 1;
+  return { x, y };
+}
+function inputWalk() {
+  if (ShotDrive) return ShotDrive;
+  let x = 0, y = 0;
+  if (inputDown('KeyA') || inputDown('ArrowLeft')) x -= 1;
+  if (inputDown('KeyD') || inputDown('ArrowRight')) x += 1;
+  if (inputDown('KeyW') || inputDown('ArrowUp')) y -= 1;
+  if (inputDown('KeyS') || inputDown('ArrowDown')) y += 1;
+  const len = Math.hypot(x, y);
+  if (len > 0) { x /= len; y /= len; }
+  return { x, y };
 }

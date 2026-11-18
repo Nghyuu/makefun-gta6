@@ -3,17 +3,101 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Solmar Heat — an open-world crime game</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #10131a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hud { position: fixed; z-index: 5; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); pointer-events: none; }
+  #hud-top-left { top: 14px; left: 16px; }
+  #hud-cash { font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #7dff9b; }
+  #hud-mission { font-size: 14px; margin-top: 4px; max-width: 420px; line-height: 1.35; }
+  #hud-top-right { top: 14px; right: 16px; text-align: right; }
+  #hud-stars { font-size: 22px; letter-spacing: 3px; }
+  #hud-hp-wrap { width: 170px; height: 10px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.5); border-radius: 5px; margin: 6px 0 2px auto; overflow: hidden; }
+  #hud-hp-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #37d67a, #a5e34f); }
+  #hud-hp-text { font-size: 11px; opacity: 0.9; }
+  #hud-ammo { font-size: 13px; margin-top: 4px; }
+  #hud-speed { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  #hud-bottom-left { bottom: 14px; left: 16px; font-size: 12px; opacity: 0.85; line-height: 1.5; }
+  #hud-bottom-right { bottom: 14px; right: 16px; }
+  #minimap { display: block; border: 2px solid rgba(255,255,255,0.65); border-radius: 6px; background: #223; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  #hud-toast-wrap { position: fixed; top: 22%; left: 50%; transform: translateX(-50%); z-index: 6; text-align: center; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.9); pointer-events: none; transition: opacity 0.4s; opacity: 0; }
+  #hud-toast { font-size: 30px; font-weight: 800; letter-spacing: 0.5px; }
+  #hud-toast-sub { font-size: 15px; margin-top: 4px; opacity: 0.95; }
+  .overlay { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; color: #fff; background: rgba(8, 10, 18, 0.72); backdrop-filter: blur(2px); }
+  .overlay h1 { font-size: 64px; margin: 0 0 4px; letter-spacing: 4px; color: #ffd23f; text-shadow: 0 4px 0 #c0392b, 0 8px 24px rgba(0,0,0,0.6); }
+  .overlay h2 { font-size: 18px; font-weight: 400; margin: 0 0 18px; color: #ffe9a8; letter-spacing: 2px; }
+  .overlay p { max-width: 560px; line-height: 1.55; margin: 6px 0; font-size: 15px; color: #eef1f5; }
+  .overlay .keys { font-size: 13px; color: #c9d1de; margin-top: 10px; line-height: 1.7; }
+  .overlay button { pointer-events: auto; cursor: pointer; margin: 8px 6px 0; padding: 12px 26px; font-size: 16px; font-weight: 700; border: none; border-radius: 8px; background: #ffd23f; color: #1a1a1a; box-shadow: 0 3px 0 #b89a1e; }
+  .overlay button:hover { background: #ffe06a; }
+  .overlay button.ghost { background: rgba(255,255,255,0.16); color: #fff; box-shadow: none; border: 1px solid rgba(255,255,255,0.5); }
+  #end-title.wasted { color: #ff5a4e; text-shadow: 0 4px 0 #7a0d06, 0 8px 24px rgba(0,0,0,0.6); }
+  #end-title.busted { color: #6ea8ff; text-shadow: 0 4px 0 #123a7a, 0 8px 24px rgba(0,0,0,0.6); }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<canvas id="game" aria-label="Solmar Heat: an open-world crime game. Drive, steal cars, dodge the police and run Rosa's jobs."></canvas>
 <p id="status" role="status" aria-live="polite"></p>
-<script type="module" src="./src/main.js"></script>
+
+<div class="hud" id="hud-top-left">
+  <div id="hud-cash">$0</div>
+  <div id="hud-mission"></div>
+</div>
+<div class="hud" id="hud-top-right">
+  <div id="hud-stars">☆☆☆☆☆</div>
+  <div id="hud-hp-wrap"><div id="hud-hp-fill"></div></div>
+  <div id="hud-hp-text">100 HP</div>
+  <div id="hud-ammo"></div>
+  <div id="hud-speed"></div>
+</div>
+<div class="hud" id="hud-bottom-left">WASD drive / walk &nbsp;·&nbsp; E enter &amp; exit car &nbsp;·&nbsp; Mouse aim, click shoot &nbsp;·&nbsp; F punch &nbsp;·&nbsp; R reload &nbsp;·&nbsp; Space handbrake &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M sound</div>
+<div class="hud" id="hud-bottom-right"><canvas id="minimap" width="200" height="150"></canvas></div>
+<div id="hud-toast-wrap"><div id="hud-toast"></div><div id="hud-toast-sub"></div></div>
+
+<div class="overlay" id="menu">
+  <h1>SOLMAR HEAT</h1>
+  <h2>AN OPEN-WORLD CRIME GAME &nbsp;·&nbsp; SOLMAR CITY</h2>
+  <p>Milo Reyes came back to Solmar City with a fast car and no money. Rosa, the fixer who runs the docks, has jobs — pickups, borrowed cars, police chases — and every one of them pays.</p>
+  <p>Drive the city. Steal what you need. Mind the stars: the Solmar PD answers fast, and they do not forget.</p>
+  <div>
+    <button id="btn-start">START THE ENGINE</button>
+    <button id="btn-continue" class="ghost">CONTINUE</button>
+    <button id="btn-sound" class="ghost">Sound: On</button>
+  </div>
+  <p class="keys">WASD / arrows — drive &amp; walk &nbsp;·&nbsp; E — enter / exit car &nbsp;·&nbsp; Mouse — aim, click — shoot &nbsp;·&nbsp; F — punch &nbsp;·&nbsp; R — reload &nbsp;·&nbsp; Space — handbrake &nbsp;·&nbsp; P — pause</p>
+  <p class="keys">An original game: its city, characters, story, art and sound are its own. Nothing in it comes from any commercial game.</p>
+</div>
+
+<div class="overlay" id="pause">
+  <h1 style="font-size:44px">PAUSED</h1>
+  <p>Solmar City waits for no one — except right now.</p>
+  <div>
+    <button id="btn-resume">RESUME</button>
+    <button id="btn-restart" class="ghost">RESTART RUN</button>
+    <button id="btn-menu" class="ghost">MAIN MENU</button>
+  </div>
+</div>
+
+<div class="overlay" id="end">
+  <h1 id="end-title">WASTED</h1>
+  <p id="end-text"></p>
+  <div><button id="btn-respawn">BACK ON YOUR FEET</button></div>
+  <p class="keys">Press R to respawn at the hideout.</p>
+</div>
+
+<script src="./src/util.js"></script>
+<script src="./src/audio.js"></script>
+<script src="./src/city.js"></script>
+<script src="./src/input.js"></script>
+<script src="./src/vehicles.js"></script>
+<script src="./src/people.js"></script>
+<script src="./src/combat.js"></script>
+<script src="./src/missions.js"></script>
+<script src="./src/render.js"></script>
+<script src="./src/hud.js"></script>
+<script src="./src/shots.js"></script>
+<script src="./src/main.js"></script>
 </body>
 </html>
