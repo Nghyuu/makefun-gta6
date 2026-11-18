@@ -19,6 +19,7 @@ const AudioSys = {
 
 function audioInit() {
   if (AudioSys.ctx) { if (AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume(); return; }
+  audioLoadMuted();
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -88,6 +89,25 @@ function sfxJingle() {
   notes.forEach((n, i) => setTimeout(() => audioTone(n, 0.16, 'triangle', 0.16), i * 110));
 }
 function sfxReload() { audioTone(440, 0.05, 'square', 0.08); setTimeout(() => audioTone(550, 0.05, 'square', 0.08), 90); }
+// Tyre skid: a short burst of filtered noise, throttled so a long handbrake
+// slide does not stack a new burst every frame.
+let skidLastT = 0;
+function sfxSkid() {
+  if (!AudioSys.ctx || AudioSys.muted) return;
+  const now = AudioSys.ctx.currentTime;
+  if (now - skidLastT < 0.22) return;
+  skidLastT = now;
+  audioNoise(0.18, 0.12, 1400);
+}
+// Mute is a player preference, not a session one: remember it across loads.
+function audioToggleMute() {
+  AudioSys.muted = !AudioSys.muted;
+  try { localStorage.setItem('solmar-muted', AudioSys.muted ? '1' : '0'); } catch (e) { /* private mode: forget it */ }
+  return AudioSys.muted;
+}
+function audioLoadMuted() {
+  try { AudioSys.muted = localStorage.getItem('solmar-muted') === '1'; } catch (e) { AudioSys.muted = false; }
+}
 
 // Called every frame: engine pitch follows the player's car, siren wails with police.
 function audioUpdate(dt) {

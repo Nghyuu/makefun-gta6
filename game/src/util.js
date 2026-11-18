@@ -45,6 +45,12 @@ function circlePushRect(c, r, rx, ry, rw, rh) {
   return push;
 }
 function fmtCash(n) { return '$' + Math.floor(n).toLocaleString('en-US'); }
+// Seconds as a short clock ("0:32"): the survive-step countdown reads
+// better as a timer than as a bare number of seconds.
+function fmtClock(s) {
+  const t = Math.max(0, Math.ceil(s));
+  return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+}
 
 // ---- shared game state ------------------------------------------------------
 // G is the one object every module reads and writes. resetGameState() rebuilds

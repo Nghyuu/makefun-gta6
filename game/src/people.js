@@ -128,8 +128,9 @@ function playerExitCar() {
   car.spd *= 0.2;
   p.car = null;
   p.onFoot = true;
-  p.x = car.x - Math.cos(car.ang) * 0 + -Math.sin(car.ang) * 34;
-  p.y = car.y - Math.sin(car.ang) * 0 + Math.cos(car.ang) * 34;
+  // Step out on the car's left side, clear of the doors and the traffic lane.
+  p.x = car.x - Math.sin(car.ang) * 34;
+  p.y = car.y + Math.cos(car.ang) * 34;
   p.ang = car.ang + Math.PI / 2;
   cityResolveCircle(p, 12);
 }

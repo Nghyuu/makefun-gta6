@@ -62,6 +62,45 @@ function shotScatterPeds(n, cx, cy, radius) {
   }
 }
 
+// Frame the chase, not just the car: put the camera halfway between the
+// player's car and the nearest live cruiser, so the tail reads in the still.
+// A camera centred on the car leaves the cruisers off the far edge — the car
+// outruns them while the scene stages (the old cover showed an empty road
+// with both cruisers just out of frame).
+function shotFrameTail() {
+  const car = G.player.car;
+  if (!car) return;
+  let best = null, bestD = Infinity;
+  for (const c of G.cars) {
+    if (c.role !== 'police' || c.dead) continue;
+    const d = dist2(c.x, c.y, car.x, car.y);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  if (!best) return;
+  G.camera.x = (car.x + best.x) / 2;
+  G.camera.y = (car.y + best.y) / 2;
+}
+
+// Keep the staged drive line clear: a pedestrian standing on the avenue the
+// Comet tears up gets run over mid-sim, which adds wanted and can push the
+// still to 5 stars (the old cover had exactly this). Any ped within 70 px of
+// the line, up to `length` px ahead of (x, y) along `ang`, steps 140 px to
+// the side before the sim runs.
+function shotClearDriveLine(x, y, ang, length) {
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  for (const ped of G.peds) {
+    const rx = ped.x - x, ry = ped.y - y;
+    const t = rx * dx + ry * dy; // distance along the drive line
+    if (t < 0 || t > length) continue;
+    const perp = -rx * dy + ry * dx; // sideways offset from the line
+    if (Math.abs(perp) > 70) continue;
+    const side = perp >= 0 ? 1 : -1;
+    ped.x += -dy * side * 140;
+    ped.y += dx * side * 140;
+    ped.dest = null; ped.waitT = 0;
+  }
+}
+
 // The cover: Milo in the yellow Comet GT tearing up Ocean Avenue with two
 // police cruisers on his tail, three stars, and Rosa's Hot Pursuit job live.
 function shotCover(seed) {
@@ -75,6 +114,9 @@ function shotCover(seed) {
   // chase stays a chase instead of a pile-up.
   shotScatterTraffic(7, 1760, 1200, 600);
   shotScatterPeds(6, 1120, 1000, 450);
+  // The Comet drives north up avenue 1440: clear the peds off that line
+  // first, so the chase is not a hit-and-run.
+  shotClearDriveLine(1440, 1320, -Math.PI / 2, 1100);
   G.heat = 65; G.wanted = 3;
   G.missionIndex = 2;
   missionStart(2);
@@ -84,6 +126,11 @@ function shotCover(seed) {
     worldStep(SHOT_STEP);
   }
   ShotDrive = null;
+  // Pin the heat after the sim: the survive step adds 60 and the car may run
+  // over a ped on the way up, either of which would push the still to 5 stars.
+  G.heat = 65; G.wanted = 3;
+  // Frame the chase: the camera sits between the Comet and its tail.
+  shotFrameTail();
   G.screen = 'playing';
   setMessage('Hot Pursuit', 'Lose the heat — 32 seconds to go', 6);
   G.missionTimer = 32;
@@ -99,8 +146,9 @@ function shotStreet(seed) {
   shotScatterPeds(12, 1600, 700, 450);
   G.missionIndex = 0;
   missionStart(0);
-  // Walk north toward the plaza for a few seconds.
-  for (let i = 0; i < 200; i++) {
+  // Walk north toward the plaza for a few seconds — short enough that Milo
+  // is still mid-frame by the plaza, not a dot at the map's north edge.
+  for (let i = 0; i < 100; i++) {
     ShotDrive = { x: 0, y: -1 };
     worldStep(SHOT_STEP);
   }
@@ -117,6 +165,8 @@ function shotChase(seed) {
   shotSpawnPolice(880, 1700);
   shotSpawnPolice(760, 1820);
   shotScatterTraffic(6, 1100, 1760, 700);
+  // The Comet runs east along the boardwalk: clear the line first.
+  shotClearDriveLine(1000, 1760, 0, 1300);
   G.heat = 85; G.wanted = 4;
   G.missionIndex = 2;
   missionStart(2);
@@ -125,6 +175,11 @@ function shotChase(seed) {
     worldStep(SHOT_STEP);
   }
   ShotDrive = null;
+  // Pin the heat after the sim, same as the cover: the survive step adds 60
+  // and the boardwalk run can clip a ped, either of which reads as 5 stars.
+  G.heat = 85; G.wanted = 4;
+  // Frame the chase: the camera sits between the Comet and its tail.
+  shotFrameTail();
   G.screen = 'playing';
   setMessage('Four stars — they want the Comet', 'Lose them or lose the car', 6);
   G.missionTimer = 24;

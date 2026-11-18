@@ -69,4 +69,8 @@ createServer((request, response) => {
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
+  // Some locked-down browsers block http://localhost loopback entirely
+  // (Local Network Access checks), so the file:// URL is the reliable way
+  // to open the game on this machine — it needs no server at all.
+  console.log(`or open directly: file://${root}/index.html`);
 });

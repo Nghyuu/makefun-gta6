@@ -84,7 +84,15 @@ function applySave(d) {
   G.player.y = d.y || G.city.spawns.playerStart.y;
   G.camera.x = G.player.x;
   G.camera.y = G.player.y;
-  missionStart(Math.min(d.missionIndex || 0, MISSIONS.length - 1));
+  if ((d.missionIndex || 0) >= MISSIONS.length) {
+    // Chapter complete: free roam, no mission to restart.
+    G.missionIndex = MISSIONS.length;
+    G.mission = null;
+    G.missionTarget = null;
+  } else missionStart(Math.min(d.missionIndex || 0, MISSIONS.length - 1));
+  // A save written mid-chaos could put the player inside a wall; resolve
+  // once so Continue never starts the player stuck in a building.
+  cityResolveCircle(G.player, 12);
 }
 
 // ---- the simulation step --------------------------------------------------------
@@ -107,10 +115,12 @@ function worldStep(dt) {
   // Exit a car with E; pause with P or Escape; M mutes.
   if (p.car && inputPressed('KeyE')) playerExitCar();
   if (inputPressed('KeyP') || inputPressed('Escape')) { pauseGame(); return; }
-  if (inputPressed('KeyM')) { AudioSys.muted = !AudioSys.muted; setMessage(AudioSys.muted ? 'Sound off' : 'Sound on', '', 1.5); }
+  if (inputPressed('KeyM')) { audioToggleMute(); syncSoundButtons(); setMessage(AudioSys.muted ? 'Sound off' : 'Sound on', '', 1.5); }
   if (p.car) {
     carUpdatePlayerCar(p.car, dt);
-    p.x = p.car.x; p.y = p.car.y; p.ang = p.car.ang;
+    // The car can blow up mid-update (explodeCar nulls p.car): re-check
+    // before syncing the player to it, or this frame throws.
+    if (p.car) { p.x = p.car.x; p.y = p.car.y; p.ang = p.car.ang; }
   } else {
     playerUpdateOnFoot(dt);
   }
@@ -164,10 +174,20 @@ function respawn() {
   p.x = G.city.spawns.hideout.x;
   p.y = G.city.spawns.hideout.y;
   G.wanted = 0; G.heat = 0;
+  // The night in the cells shakes the tail: every cruiser on the board
+  // leaves with the heat. Without this, a cop parked on the hideout refills
+  // its bust timer the instant the player stands back up (mission 4 loop).
+  G.cars = G.cars.filter(c => c.role !== 'police');
   G.camera.x = p.x; G.camera.y = p.y;
   G.screen = 'playing';
   showOverlay(null);
-  setMessage('Back on your feet', 'Rosa is not done with you yet.', 3);
+  if (G.missionIndex < MISSIONS.length) {
+    // Busted or wasted mid-job: the job is blown, start it over. This also
+    // covers a bust/waste in the gap between missions, when no mission is
+    // active yet but the next one is pending — without it the chain stalls
+    // and the next job never starts.
+    missionStart(G.missionIndex);
+  } else setMessage('Back on your feet', 'Rosa is not done with you yet.', 3);
   saveGame();
 }
 
@@ -200,6 +220,14 @@ function endScreen(kind) {
   announce(kind === 'wasted' ? 'Wasted.' : 'Busted.');
 }
 
+function syncSoundButtons() {
+  const label = AudioSys.muted ? 'Sound: Off' : 'Sound: On';
+  for (const id of ['btn-sound', 'btn-sound-pause']) {
+    const b = document.getElementById(id);
+    if (b) b.textContent = label;
+  }
+}
+
 function wireButtons() {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', () => { audioInit(); sfxClick(); fn(); }); };
   on('btn-start', () => startGame(false));
@@ -208,7 +236,8 @@ function wireButtons() {
   on('btn-restart', () => startGame(false));
   on('btn-respawn', respawn);
   on('btn-menu', () => { G.screen = 'menu'; showOverlay('menu'); saveGame(); });
-  on('btn-sound', () => { AudioSys.muted = !AudioSys.muted; const b = document.getElementById('btn-sound'); if (b) b.textContent = AudioSys.muted ? 'Sound: Off' : 'Sound: On'; });
+  on('btn-sound', () => { audioToggleMute(); syncSoundButtons(); });
+  on('btn-sound-pause', () => { audioToggleMute(); syncSoundButtons(); });
   const cont = document.getElementById('btn-continue');
   if (cont) cont.style.display = loadSave() ? 'inline-block' : 'none';
 }
@@ -231,7 +260,13 @@ function runGame() {
     last = now;
     // Menu keys: Enter/Space/click starts, and the buttons do the rest.
     if (G.screen === 'menu' && (inputPressed('Enter') || inputPressed('Space') || Input.clicked)) startGame(false);
-    else if (G.screen === 'paused' && (inputPressed('KeyP') || inputPressed('Escape'))) resumeGame();
+    else if (G.screen === 'paused' && (inputPressed('KeyP') || inputPressed('Escape'))) {
+      resumeGame();
+      // Consume the key: worldStep runs in the same frame and would see the
+      // same P press and pause again at once.
+      Input.pressed['KeyP'] = false;
+      Input.pressed['Escape'] = false;
+    }
     else if ((G.screen === 'wasted' || G.screen === 'busted') && inputPressed('KeyR')) respawn();
     while (accumulator >= STEP) {
       worldStep(STEP);

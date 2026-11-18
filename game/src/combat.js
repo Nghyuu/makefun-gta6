@@ -41,6 +41,9 @@ function explodeAt(x, y, scale) {
     });
   }
   for (let i = 0; i < 10; i++) addSmoke(x + rngRange(G.rng, -20, 20), y + rngRange(G.rng, -20, 20));
+  // A shockwave ring: it grows and fades over half a second (render.js
+  // strokes ring particles instead of filling them).
+  G.parts.push({ x, y, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 14, color: '#ff9e00', grav: 0, ring: true });
   addShake(8 * scale);
   // The blast hurts whatever is close.
   const R = 120 * scale;

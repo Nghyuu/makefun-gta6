@@ -51,25 +51,29 @@ function inputPressed(code) { return !!Input.pressed[code]; }
 // walk vectors come from it instead of the keys (shots.js sets and clears it).
 let ShotDrive = null;
 
-// The drive vector from keys: x is steering (-1 left, 1 right), y is throttle
-// (1 forward, -1 reverse). On foot the same vector is a walk direction.
-function inputDrive() {
-  if (ShotDrive) return ShotDrive;
-  let x = 0, y = 0;
-  if (inputDown('KeyA') || inputDown('ArrowLeft')) x -= 1;
-  if (inputDown('KeyD') || inputDown('ArrowRight')) x += 1;
-  if (inputDown('KeyW') || inputDown('ArrowUp')) y += 1;
-  if (inputDown('KeyS') || inputDown('ArrowDown')) y -= 1;
-  return { x, y };
-}
-function inputWalk() {
-  if (ShotDrive) return ShotDrive;
+// The shared movement vector from the keys, in screen terms: x is left/right
+// (-1 left, 1 right), y is up/down (-1 up, 1 down). Drive and walk both read
+// the same keys; they only differ in what y means (a car wants throttle, a
+// walker wants a screen direction), so inputDrive flips y and inputWalk
+// normalises.
+function inputAxes() {
   let x = 0, y = 0;
   if (inputDown('KeyA') || inputDown('ArrowLeft')) x -= 1;
   if (inputDown('KeyD') || inputDown('ArrowRight')) x += 1;
   if (inputDown('KeyW') || inputDown('ArrowUp')) y -= 1;
   if (inputDown('KeyS') || inputDown('ArrowDown')) y += 1;
-  const len = Math.hypot(x, y);
-  if (len > 0) { x /= len; y /= len; }
   return { x, y };
+}
+function inputDrive() {
+  if (ShotDrive) return ShotDrive;
+  const v = inputAxes();
+  // Throttle is forward-positive: W (screen up) is full throttle.
+  return { x: v.x, y: -v.y };
+}
+function inputWalk() {
+  if (ShotDrive) return ShotDrive;
+  const v = inputAxes();
+  const len = Math.hypot(v.x, v.y);
+  if (len > 0) { v.x /= len; v.y /= len; }
+  return v;
 }

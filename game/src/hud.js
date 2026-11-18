@@ -8,6 +8,10 @@ const Hud = {
   map: null, mapCtx: null, mapW: 200, mapH: 150,
 };
 
+// Whether the HUD is currently shown; hudUpdate flips it when the screen
+// changes (hidden on the title screen, shown everywhere else).
+let hudVisible = true;
+
 function hudInit() {
   Hud.cash = document.getElementById('hud-cash');
   Hud.mission = document.getElementById('hud-mission');
@@ -34,6 +38,14 @@ function hudStars(n) {
 }
 
 function hudUpdate() {
+  // The title screen is a full-screen panel: hide the HUD behind it, or the
+  // cash, stars and minimap peek out around its edges. Only touch the DOM
+  // when the visibility actually flips.
+  const showHud = G.screen !== 'menu';
+  if (showHud !== hudVisible) {
+    hudVisible = showHud;
+    document.querySelectorAll('.hud, #hud-toast-wrap').forEach((el) => { el.style.display = showHud ? '' : 'none'; });
+  }
   const p = G.player;
   if (Hud.cash) Hud.cash.textContent = fmtCash(G.cash);
   if (Hud.mission) Hud.mission.textContent = missionObjectiveText();
@@ -41,7 +53,12 @@ function hudUpdate() {
     Hud.stars.textContent = hudStars(G.wanted);
     Hud.stars.style.color = G.wanted > 0 ? '#ffd23f' : 'rgba(255,255,255,0.45)';
   }
-  if (Hud.hpFill) Hud.hpFill.style.width = clamp(p.hp, 0, 100) + '%';
+  if (Hud.hpFill) {
+    Hud.hpFill.style.width = clamp(p.hp, 0, 100) + '%';
+    // The bar itself warns you: green while healthy, amber when hurt, red
+    // when one more hit ends the run.
+    Hud.hpFill.style.background = p.hp > 50 ? '#58b368' : p.hp > 25 ? '#f2a541' : '#e63946';
+  }
   if (Hud.hpText) Hud.hpText.textContent = Math.ceil(p.hp) + ' HP';
   if (Hud.ammo) Hud.ammo.textContent = p.onFoot ? ('AMMO ' + p.ammo + '/12') : '';
   if (Hud.speed) {

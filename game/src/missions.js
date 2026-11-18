@@ -21,8 +21,8 @@ const MISSIONS = [
     brief: 'A yellow Comet GT is parked by the plaza. Borrow it. Bring it to the garage on Palm Row.',
     reward: 600,
     steps: [
-      { type: 'goto', x: 1600, y: 640, radius: 90, text: 'Head to the plaza' },
-      { type: 'steal', x: 1600, y: 640, radius: 60, text: 'Take the yellow Comet GT (press E)' },
+      { type: 'goto', x: 1280, y: 320, radius: 90, text: 'Head to the plaza' },
+      { type: 'steal', x: 1280, y: 320, radius: 60, text: 'Take the yellow Comet GT (press E)' },
       { type: 'goto', x: 2080, y: 1440, radius: 80, text: 'Deliver the Comet to the garage', needCar: true },
     ],
   },
@@ -57,6 +57,12 @@ function missionCurrent() { return MISSIONS[G.missionIndex] || null; }
 function missionTarget() { return G.missionTarget || null; }
 
 function missionStart(index) {
+  // A previous mission's target car goes away: a fresh attempt gets a fresh Comet.
+  // But never the one the player is sitting in — filtering it out of G.cars
+  // while G.player.car still points at it leaves the player driving an
+  // invisible car (no body drawn, nothing collides with it). That is what
+  // the cover shot showed: the Comet's ring, but no Comet.
+  G.cars = G.cars.filter(c => !c.isTarget || c === G.player.car);
   G.missionIndex = index;
   G.missionStep = 0;
   G.mission = MISSIONS[index] || null;
@@ -71,8 +77,10 @@ function missionEnterStep() {
   const step = m.steps[G.missionStep];
   if (!step) { missionComplete(); return; }
   if (step.type === 'steal') {
-    // Park the yellow Comet GT by the plaza for the player to take.
-    const car = makeCar(1600, 700, Math.PI / 2, 'sport', 'parked');
+    // Park the yellow Comet GT on the plaza for the player to take: open
+    // ground, so no building can sit between the player and the car.
+    const pz = G.city.spawns.plaza;
+    const car = makeCar(pz.x, pz.y + 40, Math.PI / 2, 'sport', 'parked');
     car.color = '#ffe600';
     car.isTarget = true;
     G.cars.push(car);
@@ -105,12 +113,21 @@ function missionComplete() {
   G.stats.missionsDone++;
   sfxJingle();
   setMessage('Job done — ' + m.title, fmtCash(m.reward) + ' paid. ' + (G.missionIndex + 1 < MISSIONS.length ? 'Rosa has another job.' : 'That is the whole chapter. Solmar is yours now.'), 5);
+  // The getaway is part of the job: the heat comes off with the mission, so
+  // the player is never busted while standing at the mission endpoint
+  // waiting for the next brief (and the tailing cruisers give up).
+  G.wanted = 0; G.heat = 0;
+  // Give up for real: a cruiser left on the board keeps hunting at wanted 0
+  // (carUpdatePolice only gives up past 1100 px), so clear the tail here.
+  G.cars = G.cars.filter(c => c.role !== 'police');
   G.mission = null;
   G.missionTarget = null;
   G.missionIndex++;
   saveGame();
   if (G.missionIndex < MISSIONS.length) {
-    setTimeout(() => { if (G.screen === 'playing' && !G.shotMode) missionStart(G.missionIndex); }, 4000);
+    // !G.mission: a respawn may already have started the next mission
+    // (a bust in the gap between missions), so do not start it twice.
+    setTimeout(() => { if (G.screen === 'playing' && !G.shotMode && !G.mission) missionStart(G.missionIndex); }, 4000);
   }
 }
 
@@ -119,7 +136,7 @@ function missionObjectiveText() {
     const step = G.mission.steps[G.missionStep];
     if (step) {
       let text = G.mission.title + ': ' + step.text;
-      if (step.type === 'survive') text += ' — ' + Math.max(0, Math.ceil(G.missionTimer)) + 's';
+      if (step.type === 'survive') text += ' — ' + fmtClock(G.missionTimer);
       return text;
     }
   }
@@ -135,12 +152,16 @@ function missionUpdate(dt) {
     const p = G.player;
     if (step.type === 'goto') {
       const px = p.car ? p.car.x : p.x, py = p.car ? p.car.y : p.y;
-      if (step.needCar && !p.car) { /* must arrive by car */ }
+      if (step.needCar && !p.car) return; // must arrive by car
       if (dist2(px, py, step.x, step.y) < step.radius * step.radius) missionAdvance();
     } else if (step.type === 'steal') {
       if (p.car && p.car.isTarget) missionAdvance();
     } else if (step.type === 'survive') {
       G.missionTimer -= dt;
+      // Hold the heat up while the timer runs: without this the heat decays
+      // to 0 mid-survive, the cruisers give up, and the chase goes quiet
+      // before the player has actually survived anything.
+      G.heat = Math.max(G.heat, 40);
       if (G.missionTimer <= 0) missionAdvance();
     }
     return;

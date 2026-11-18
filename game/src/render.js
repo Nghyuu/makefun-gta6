@@ -335,6 +335,10 @@ function drawCars(ctx, vx, vy, vw, vh) {
   }
   for (const c of cars) {
     if (!inView(c.x, c.y, 80, vx, vy, vw, vh)) continue;
+    // A soft drop shadow grounds the car on the road (buildings and trees
+    // already have one; cars looked pasted-on without it).
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(c.x + 3, c.y + 5, c.len * 0.5, c.wid * 0.55, c.ang, 0, Math.PI * 2); ctx.fill();
     drawCarShape(ctx, c);
   }
 }
@@ -414,6 +418,16 @@ function drawBullets(ctx) {
 function drawParts(ctx) {
   for (const pt of G.parts) {
     const a = clamp(pt.life / pt.max, 0, 1);
+    if (pt.ring) {
+      // A shockwave: an expanding ring that fades out (combat.js explodeAt).
+      const r = pt.size + (1 - a) * 130;
+      ctx.strokeStyle = pt.color;
+      ctx.globalAlpha = a * 0.8;
+      ctx.lineWidth = 4 * a + 1;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     if (pt.smoke) {
       ctx.fillStyle = 'rgba(80,80,80,' + (a * 0.45) + ')';
       ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2); ctx.fill();

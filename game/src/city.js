@@ -16,6 +16,12 @@ const CITY = {
   DOCKS_X: 124,
 };
 
+// Named blocks: the park sits in one fixed block in the middle of the city,
+// the plaza in one fixed block in the north-east. Missions and spawns refer
+// to these instead of re-deriving the block from the grid.
+const PARK_BLOCK = { bi: 3, bj: 2 };
+const PLAZA_BLOCK = { bi: 4, bj: 1 };
+
 const BUILDING_COLORS = ['#f2c14e', '#e07a5f', '#81b29a', '#e9c46a', '#f4a261', '#a8dadc', '#e5989b', '#ffcdb2', '#b7e4c7', '#ffdab9'];
 const ROOF_COLORS = ['#c96f4a', '#8a6d4b', '#5d7a6a', '#7a6a8a', '#b08968'];
 
@@ -67,7 +73,7 @@ function cityBuild(seed) {
         continue;
       }
       // The park: one block in the middle of the city, with a pond and trees.
-      if (bi === 3 && bj === 2) {
+      if (bi === PARK_BLOCK.bi && bj === PARK_BLOCK.bj) {
         city.park = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
         for (let i = 0; i < 26; i++) {
           city.trees.push({ x: rngRange(rng, bx0 + 14, bx1 - 14), y: rngRange(rng, by0 + 14, by1 - 14), r: rngInt(rng, 10, 16) });
@@ -75,7 +81,7 @@ function cityBuild(seed) {
         continue;
       }
       // The plaza: one block with a fountain and benches, in the north-east.
-      if (bi === 4 && bj === 1) {
+      if (bi === PLAZA_BLOCK.bi && bj === PLAZA_BLOCK.bj) {
         city.plaza = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
         for (let i = 0; i < 8; i++) {
           city.trees.push({ x: rngRange(rng, bx0 + 16, bx1 - 16), y: rngRange(rng, by0 + 16, by1 - 16), r: rngInt(rng, 9, 13) });
@@ -116,7 +122,9 @@ function cityBuild(seed) {
     playerStart: { x: 800, y: 1120 },
     docks: { x: 90, y: 800 },
     marina: { x: 2320, y: 1700 },
-    plaza: { x: 1600, y: 640 },
+    // The plaza spawn is the real plaza's centre, not a guess: the plaza
+    // block is PLAZA_BLOCK (avenues 1120–1440, streets 160–480).
+    plaza: { x: city.plaza.x + city.plaza.w / 2, y: city.plaza.y + city.plaza.h / 2 },
     garage: { x: 2080, y: 1440 },
     hideout: { x: 480, y: 1440 },
     park: { x: 1280, y: 960 },

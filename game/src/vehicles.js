@@ -180,11 +180,20 @@ function carUpdateTraffic(car, dt) {
 
 function carUpdatePolice(car, dt) {
   const p = G.player;
+  if (G.wanted === 0) {
+    // No heat, no chase: a cruiser with nothing to answer gives up and
+    // leaves. Without this, a cop left over from a cleared mission keeps
+    // hunting — and busts the player again the moment they respawn next to
+    // it, forever (the mission-4 bust loop).
+    car.dead = true; car.deadT = 0; return;
+  }
   const d = Math.hypot(p.x - car.x, p.y - car.y);
   if (d > 1100) { // too far: give up and fade out
     car.dead = true; car.deadT = 0; return;
   }
-  const maxSpd = Math.min(600, 500 + G.wanted * 22);
+  // Brake to a crawl up close: a cruiser tearing past at 500 px/s can never
+  // sit on the player long enough for the bust timer to fill.
+  const maxSpd = d < 70 ? 40 : Math.min(600, 500 + G.wanted * 22, 70 + d * 1.5);
   carSteerToward(car, p.x, p.y, maxSpd, dt);
   carIntegrate(car, dt);
   // Busted: a cop sitting on the player while the player is slow or on foot.
@@ -213,8 +222,9 @@ function carUpdatePlayerCar(car, dt) {
   const turnRate = 2.7 / (1 + Math.abs(car.spd) / 260);
   car.ang += steer * turnRate * dt * (car.spd >= 0 ? 1 : -1) * clamp(Math.abs(car.spd) / 60, 0, 1);
   if (handbrake && Math.abs(car.spd) > 120) {
-    // Handbrake turn: extra yaw and a skid mark.
+    // Handbrake turn: extra yaw, a skid mark and a tyre squeal.
     car.ang += steer * 1.1 * dt;
+    sfxSkid();
     if (G.rng() < 0.6) {
       const r = carRear(car);
       G.skid.push({ x: r.x, y: r.y, ang: car.ang, t: 3 });
